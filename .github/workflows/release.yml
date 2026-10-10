@@ -1,0 +1,92 @@
+name: Build and release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build -c Release --no-restore
+
+      - name: Publish folder-based self-contained x64 build
+        shell: pwsh
+        run: |
+          $out = "dist/NetworkActivityTray"
+          dotnet publish `
+            -c Release `
+            -r win-x64 `
+            --self-contained true `
+            -p:PublishSingleFile=false `
+            -p:PublishTrimmed=false `
+            -p:DebugType=None `
+            -o $out
+
+          New-Item -ItemType File -Path "$out/portable.txt" -Force | Out-Null
+
+      - name: Smoke-test executable metadata
+        shell: pwsh
+        run: |
+          $exe = "dist/NetworkActivityTray/NetworkActivityTray.exe"
+          if (-not (Test-Path $exe)) {
+            throw "Published executable not found: $exe"
+          }
+
+          $v = (Get-Item $exe).VersionInfo
+          Write-Host "File version: $($v.FileVersion)"
+          Write-Host "Product: $($v.ProductName)"
+          Write-Host "Size: $((Get-Item $exe).Length) bytes"
+
+      - name: Package ZIP and SHA-256
+        id: package
+        shell: pwsh
+        run: |
+          $version = "0.5.0"
+          if ("${{ github.ref_type }}" -eq "tag") {
+            $version = "${{ github.ref_name }}".TrimStart("v")
+          }
+
+          $zip = "NetworkActivityTray-$version-win-x64-portable.zip"
+          Compress-Archive -Path "dist/NetworkActivityTray" -DestinationPath $zip
+
+          $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $zip" | Set-Content "$zip.sha256"
+
+          "zip=$zip" >> $env:GITHUB_OUTPUT
+          "sha=$zip.sha256" >> $env:GITHUB_OUTPUT
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NetworkActivityTray-win-x64
+          path: |
+            ${{ steps.package.outputs.zip }}
+            ${{ steps.package.outputs.sha }}
+
+      - name: Attach to GitHub Release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ steps.package.outputs.zip }}
+            ${{ steps.package.outputs.sha }}
+          generate_release_notes: true

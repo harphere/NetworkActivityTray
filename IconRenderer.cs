@@ -12,8 +12,8 @@ internal static class IconRenderer
 
         g.SmoothingMode = SmoothingMode.AntiAlias;
         g.Clear(Color.Transparent);
-
         float s = size / 32f;
+
         PointF[] triangle =
         [
             new(16 * s, 4 * s),
@@ -23,7 +23,6 @@ internal static class IconRenderer
 
         using var triangleFill = new SolidBrush(Color.White);
         using var outline = new Pen(Color.FromArgb(210, 35, 35, 35), Math.Max(1f, 1.4f * s));
-
         g.FillPolygon(triangleFill, triangle);
         g.DrawPolygon(outline, triangle);
 
@@ -38,10 +37,7 @@ internal static class IconRenderer
             using Icon temp = Icon.FromHandle(hIcon);
             return (Icon)temp.Clone();
         }
-        finally
-        {
-            DestroyIcon(hIcon);
-        }
+        finally { DestroyIcon(hIcon); }
     }
 
     private static void DrawActivityOverlay(Graphics g, ActivityState state, float s)
@@ -62,9 +58,7 @@ internal static class IconRenderer
     private static void DrawArrow(Graphics g, Pen pen, PointF start, PointF end, bool up, float s)
     {
         g.DrawLine(pen, start, end);
-        float x = end.X;
-        float y = end.Y;
-        float wing = 2.8f * s;
+        float x = end.X, y = end.Y, wing = 2.8f * s;
 
         if (up)
         {
